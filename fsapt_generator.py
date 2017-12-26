@@ -1,3 +1,13 @@
+import os
+
+def fsapt_generator():
+    
+    os.mkdir('fsapt/')
+    with open('fsapt/fA.dat','w') as fil:
+        fil.close()    
+    with open('fsapt/fB.dat','w') as fil:
+        fil.close()    
+
 #import os, sys, math, commands, string
 #export PYTHONPATH=/anaconda/bin/:/Users/brandonbakr/psi4/install/lib/
 #from pymol import cmd
