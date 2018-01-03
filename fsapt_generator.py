@@ -1,23 +1,34 @@
 import os
+import numpy as np
+import copy
+from pymol import cmd 
+import sys
 
 def fsapt_generator():
     pass 
     # Should take border atoms (only!) from selections for monomers A & B (and C if C)
     # Should return fA and fB 
 
-def bfs():
-    pass
+# covalent (or ionic) radii by atomic element in angstroms from
+# "Inorganic Chemistry" 3rd ed, Housecroft, Appendix 6, pgs 1013-1014
+cov_rad = {   'H' : 0.37, 'C' : 0.77, 'O' : 0.73, 'N' : 0.75, 'F' : 0.71,
+  'P' : 1.10, 'S' : 1.03, 'Cl': 0.99, 'Br': 1.14, 'I' : 1.33, 'He': 0.30,
+  'Ne': 0.84, 'Ar': 1.00, 'Li': 1.02, 'Be': 0.27, 'B' : 0.88, 'Na': 1.02,
+  'Mg': 0.72, 'Al': 1.30, 'Si': 1.18, 'K' : 1.38, 'Ca': 1.00, 'Sc': 0.75,
+  'Ti': 0.86, 'V' : 0.79, 'Cr': 0.73, 'Mn': 0.67, 'Fe': 0.61, 'Co': 0.64,
+  'Ni': 0.55, 'Cu': 0.46, 'Zn': 0.60, 'Ga': 1.22, 'Ge': 1.22, 'As': 1.22,
+  'Se': 1.17, 'Br': 1.14, 'Kr': 1.03}
 
-class txt_molecule():
+def bound(A_el, A_coord, B_el, B_coord):
+    dist = np.linalg.norm(A_coord - B_coord)
+    limit = cov_rad[A_el] + cov_rad[B_el]
+    return dist <= limit
 
-    def __init__(self, geom_path):
+class pm_mol():
 
-        self.molecule = ""
-        with open(geom_path, 'r') as geom_fil:
-            geom_lines = geom_fil.readlines()[2:]
-            for lin in geom_lines
-###### CRYSTAL CLASS #####
+    ###### CRYSTAL CLASS #####
     def __init__(self, mol): 
+    
         if type(mol) is str and mol.endswith('.xyz'):
             self.fil = mol
             with open(mol,'r') as ofil:
@@ -36,6 +47,7 @@ class txt_molecule():
         self.frags = []
 
     def print_out(self):
+    
         els = self.mol[0]
         print(len(els))
         print("In Angstrom")
@@ -45,8 +57,12 @@ class txt_molecule():
             c = coords[i]
             print("%2s %7.3f %7.3f %7.3f" % (el,c[0],c[1],c[2]))
         print("")
+    
+    def copy(self):
+        return copy.deepcopy(self)
 
     def write_out(self,fil_name):
+    
         with open(fil_name,'w') as fil:
             els = self.mol[0]
             fil.write("%d\n" % (len(els)))
@@ -58,49 +74,47 @@ class txt_molecule():
                 fil.write("%2s %7.3f %7.3f %7.3f\n" % (el,c[0],c[1],c[2]))
 
     def bfs(self):
+    
         els = self.mol[0]
         coords = self.mol[1]
         lc = len(coords)
-        bonds = {}
+        bonds = []
         #find all bonded atoms
         for i in range(1,lc):
             for j in range(i):
                 if not bound(els[i],coords[i],els[j],coords[j]): continue
-                try: bonds[i].append(j)
-                except: bonds[i] = [j]
+                bonds.append(set([i,j]))
         #Construct subsets such that each pair has a null intersection (BFS)
         minds = []
-        ind = bonds.keys()[0]
-        while bonds != {}:
-        
+        while bonds != []:
+            mol = bonds[0]
+            bonds.remove(bonds[0])
+            intersect = True
+            while intersect: 
+                intersect = False
+                remove = []
+                for i in bonds:
+                    if i & mol == set([]): continue
+                    for j in i: mol.add(j)
+                    intersect = True
+                    remove.append(i)
+                for i in remove: bonds.remove(i)
+            minds.append(mol)
+        #build mol out of separated inds
+        mols = []
+        for mol in minds:
+            mels = []
+            mcoords = []
+            for i in mol:
+                mels.append(els[i])
+                mcoords.append(coords[i])
+            mols.append(pm_mol([mels,mcoords]))
         self.frags = mols
 
-    #function that moves mol to align with self
-    # 0 is Q
-    # 1 is P
-    def rmsd(self, mol):
-        #self
-        els0 = self.mol[0]  
-        coords0 = self.mol[1] 
-        #shift to center
-        coords0 = coords0 - coords0.mean(axis=0)
-        #mol
-        els1 = mol.mol[0]  
-        coords1 = mol.mol[1]  
-        coords1 = coords1 - coords1.mean(axis=0)
-        
-        #covariance matrix
-        H = np.dot(coords1.T, coords0)
-        V, s, Wt = np.linalg.svd(H)
-        d = np.linalg.det(np.dot(V,Wt))
-        I = np.identity(3)
-        I[2,2] = d 
-        R = np.dot(np.dot(V,I),Wt)
-        coords1 = np.dot(coords1,R)
-        ans = np.linalg.norm(coords0 - coords1) / np.sqrt(coords0.shape[0])
-        return ans
+
     
     def extract_frags(self, frag_nums):
+    
         els = []
         coords = np.array([]).reshape(0,3)
         for f in frag_nums:
@@ -108,43 +122,164 @@ class txt_molecule():
             coords = np.vstack([coords,self.frags[f].mol[1]])
         return crystal([els,coords])    
 
-    def nuclear_repulsion_energy(self):
-        e = 0.
-        for a1 in range(len(self.mol[0])):
-            for a2 in range(a1):
-                z1 = z_num[self.mol[0][a1]]
-                z2 = z_num[self.mol[0][a2]]
-                d = 1.88973*dist(self.mol[1][a1],self.mol[1][a2])
-                e += z1 * z2 / d
-        return e 
+    def cut(self, frags):
+        # remove atoms of other frags
+        # bfs
+        # find frag with desired atoms
+        # extract and set equal to frag
+        lets = ['A', 'B' ,'C']
+        cuts = {}
+        for let in lets:
+            border_atoms = frags[let]['sele_'+let]
+            # remove atoms of other frags
+            # I believe this is just border_atoms xor border_selections
+            other_borders = []
+            for let2 in lets:
+                if let == let2: continue
+                for atoms in frags[let2]['sele_'+let2]:
+                    other_borders.append(atoms)
+            
+            copy_mol = self.copy() 
+            
+            for border in other_borders:
+                copy_mol.mol[0][border] = 'XXX'
+                
+            new_copy_els = []
+            new_copy_coords = []
+            for i in range(len(copy_mol.mol[0])):
+                if copy_mol.mol[0][i] == 'XXX': continue
+                new_copy_els.append(copy_mol.mol[0][i]) 
+                new_copy_coords.append(copy_mol.mol[1][i]) 
+            
+            new_copy = pm_mol([new_copy_els, new_copy_coords])
+            new_copy.bfs()
+            for border in border_atoms:
+                target_coords = self.mol[1][border]
+                found_frag = False
+                for frag in new_copy.frags:
+                    for coords in frag.mol[1]:
+                        if not np.array_equal(target_coords, coords): continue
+                        found_frag = frag
+                        break
+                    if found_frag != False: break
+                #found_frag.print_out()
+                if let == 'C': break
+            cuts[let] = found_frag
+        self.cuts = cuts
+
+    #color fragments based on fragmentation from bfs
+    def color_frags(self):
+    
+        lets = ['A', 'B', 'C']
+        inds = [[], [], []]
+        dict_inds = dict(zip(lets,inds))
+        for let in lets:
+            cut = self.cuts[let]
+            cut_coords = cut.mol[1]
+            for coord in cut_coords:
+                for ind in range(len(self.mol[1])):
+                    if np.array_equal(self.mol[1][ind], coord):
+                        dict_inds[let].append(ind)
+                        break
+        for let in lets:
+            selection = ''
+            for ind in dict_inds[let]: 
+                selection += 'rank '+str(ind)+' '
+            cmd.select("(sele_"+let+")", selection)
+            cmd.color("red", "(sele_A)")
+            cmd.color("blue", "(sele_B)")
+            cmd.color("grey", "(sele_C)")
+
+    
+        #warm = []
+        #cool = []
+        #x = math.ceil((len(fA)/8.)**(1./3.))
+        #for li in range(int(2*x)):
+        #    i = 1.0 - li*(1.0-0.6)/(2*x-1)
+        #    for lj in range(int(4*x)):
+        #        j = lj*(1.0-0.0)/(4*x-1)
+        #        for lk in range(int(x)):
+        #            safe = x
+        #            if x != 1: safe = x - 1
+        #            k = lk*(0.25-0.0)/(safe)
+        #            warm.append([i,j,k])
+        #
+        #x = math.ceil((len(fB)/8.)**(1./3.))
+        #for lk in range(int(2*x)):
+        #    k = 1.0 - lk*(1.0-0.6)/(2*x-1)
+        #    for lj in range(int(4*x)):
+        #        j = lj*(1.0-0.0)/(4*x-1)
+        #        for li in range(int(x)):
+        #            safe = x
+        #            if x != 1: safe = x - 1
+        #            i = li*(0.25-0.0)/(safe)
+        #            cool.append([i,j,k])
+    
+        #for frag in range(len(fA)):
+        #    selection = ''
+        #    for atom in range(len(fA[frag][1:])):
+        #        key = str(map2orig[map2A[fA[frag][1+atom]]])
+        #        selection += 'rank '+key+' '                
+        #    cmd.select("("+fA[frag][0]+")", selection)
+        #    #linspace through color vector
+        #    safefA = len(fA)
+        #    if len(fA) != 1: safefA = len(fA) - 1
+        #    fragind = int(math.floor(frag*((len(warm))-1)/safefA))
+        #    color = warm[fragind]
+        #    cmd.set_color("A_"+fA[frag][0], color)
+        #    cmd.color("A_"+fA[frag][0],"("+fA[frag][0]+")")
+        #for frag in range(len(fB)):
+        #    selection = ''
+        #    for atom in range(len(fB[frag][1:])):
+        #        key = str(map2orig[map2B[fB[frag][1+atom]]+len(Aatoms)])
+        #        selection += 'rank '+key+' '           
+        #    cmd.select("("+fB[frag][0]+")", selection)
+        #    #linspace through color vector
+        #    safefB = len(fB)
+        #    if len(fB) != 1: safefB = len(fB) - 1
+        #    fragind = int(math.floor(frag*(len(cool)-1)/safefB))
+        #    color = cool[fragind]
+        #    cmd.set_color("B_"+str(fB[frag]), color)
+        #    cmd.color("B_"+str(fB[frag]),"("+fB[frag][0]+")")
+        #if len(Catoms) > 0:
+        #    selection = ''
+        #    for atom in Catoms:
+        #        selection += 'rank '+str(atom)+' '
+        #    cmd.select("(ISAPT_C)", selection)
+        #    cmd.color("grey", "(ISAPT_C)")
 
 
-#    os.mkdir('fsapt/')
-#    with open('fsapt/fA.dat','w') as fil:
-#        fil.close()    
-#    with open('fsapt/fB.dat','w') as fil:
-#        fil.close()    
+#diphenyl = pm_mol('examples/diphenyl_benzene.xyz')
+#diphenyl.cut(A = [12], B = [24], C = [2, 4])
 
-#import os, sys, math, commands, string
-#export PYTHONPATH=/anaconda/bin/:/Users/brandonbakr/psi4/install/lib/
-#from pymol import cmd
-#
-##deprecated atm
-#def write_frags(frags,base_name):
-#    for frag in range(len(frags)):
-#        fil = open(os.getcwd()+'/'+base_name+'_'+string.ascii_uppercase[frag]+'.xyz','w')
-#        fil.write(str(len(frags[frag]))+'\n\n')
-#        for lin in frags[frag]:
-#            fil.write(lin)
-#        fil.close()
-#
-##read main geometry
-#def read_original_geometry(fil_name):
-#    geom = []
-#    for i in open(os.getcwd()+'/'+fil_name,'r'):
-#        if len(i.split()) == 4: geom.append(i)
-#    return geom
-#
+# Read main geometry
+def read_original_geometry():
+
+    fil_name = cmd.get_names("all")[0]+'.xyz'
+    geometry = pm_mol(fil_name)
+    return geometry
+
+
+def fisapt():
+
+    cmd.show("sticks", "all")
+    total_molecule = read_original_geometry()
+    frag_names = cmd.get_names("all")[1:]
+    frags = {'A': {}, 'B': {}, 'C': {}}
+    for name in frag_names:
+        classification = name.split('_')[-1].upper()
+        frags[classification][name] = []
+        stored.list=[]
+        cmd.iterate("("+name+")","stored.list.append((name,rank))")
+        for atom in stored.list: 
+            frags[classification][name].append(atom[1])
+    cuts = total_molecule.cut(frags)
+    total_molecule.color_frags()
+\
+
+cmd.extend("fisapt",fisapt)
+
+#### OLD FRAG GEN ###
 ##read fragmentation input for eventual fA and fB generation
 #def read_fragment_files():
 #    frags = []
@@ -162,38 +297,6 @@ class txt_molecule():
 #            frag.append(atom[1])
 #        frags.append(frag)
 #    return frags
-#
-##write fragmentation input for fA and fB generation
-#def write_prefrag_file(frags):
-#    fragfile = open(os.getcwd()+'/'+'fraginfo.dat','w')
-#    for frag in frags:
-#        fragfile.write(str(frag[0])+' ')
-#        for el in frag[1:]:
-#            fragfile.write(str(el+1)+' ')
-#        fragfile.write('\n')
-#    fragfile.close()
-#
-##write fragment geometries and move them to check_geoms/ directory 
-#def write_frag_geoms():
-#    newgeomz = open(os.getcwd()+'/'+'Geomz.xyz','r')   
-#    fil = ''
-#    fils = []
-#    for lin in newgeomz:
-#        if len(lin.split()) == 1:
-#            if fil != '': fil.close() 
-#            num = lin
-#            name = next(newgeomz)
-#            fil = open(os.getcwd()+'/'+name.split()[1]+'.xyz','w')
-#            fils.append(name.split()[1]+'.xyz') 
-#            fil.write(num)
-#            fil.write(name)
-#        if len(lin.split()) == 4: 
-#            fil.write(lin)
-#    fil.close()
-#    os.system("mkdir check_geoms")
-#    for fil in fils: os.system("mv "+fil+" check_geoms/")
-#
-##map atoms from monomers to abs position in input and fA and fB
 #def get_maps_for_separating(geom):
 #    clone = [x for x in range(len(geom))]
 #    fA = []
@@ -255,6 +358,58 @@ class txt_molecule():
 #            if geom[a] == new_geom[b]:
 #                map2orig[b] = a 
 #    return Aatoms, map2A, fA, Batoms, map2B, fB, Catoms, map2orig
+#        
+#
+#
+#os.mkdir('fsapt/')
+#with open('fsapt/fA.dat','w') as fil:
+#    fil.close()    
+#with open('fsapt/fB.dat','w') as fil:
+#    fil.close()    
+#
+#
+##deprecated atm
+#def write_frags(frags,base_name):
+#    for frag in range(len(frags)):
+#        fil = open(os.getcwd()+'/'+base_name+'_'+string.ascii_uppercase[frag]+'.xyz','w')
+#        fil.write(str(len(frags[frag]))+'\n\n')
+#        for lin in frags[frag]:
+#            fil.write(lin)
+#        fil.close()
+#
+#
+#
+##write fragmentation input for fA and fB generation
+#def write_prefrag_file(frags):
+#    fragfile = open(os.getcwd()+'/'+'fraginfo.dat','w')
+#    for frag in frags:
+#        fragfile.write(str(frag[0])+' ')
+#        for el in frag[1:]:
+#            fragfile.write(str(el+1)+' ')
+#        fragfile.write('\n')
+#    fragfile.close()
+#
+##write fragment geometries and move them to check_geoms/ directory 
+#def write_frag_geoms():
+#    newgeomz = open(os.getcwd()+'/'+'Geomz.xyz','r')   
+#    fil = ''
+#    fils = []
+#    for lin in newgeomz:
+#        if len(lin.split()) == 1:
+#            if fil != '': fil.close() 
+#            num = lin
+#            name = next(newgeomz)
+#            fil = open(os.getcwd()+'/'+name.split()[1]+'.xyz','w')
+#            fils.append(name.split()[1]+'.xyz') 
+#            fil.write(num)
+#            fil.write(name)
+#        if len(lin.split()) == 4: 
+#            fil.write(lin)
+#    fil.close()
+#    os.system("mkdir check_geoms")
+#    for fil in fils: os.system("mv "+fil+" check_geoms/")
+#
+##map atoms from monomers to abs position in input and fA and fB
 #
 ##Write input file
 #def write_input_file(Aatoms, Batoms, Catoms, geom, fil_name, fsapt_path, fsapt_plot_path, inp_fil, template):
@@ -395,130 +550,6 @@ class txt_molecule():
 #        if dist(color,c) < 0.5/len(colorlist): return False
 #    return True
 #
-##color fragments based on fragmentation from bfs
-#def color_frags(map2orig, map2A, fA, map2B, fB, Aatoms, Catoms):
-#    warm = []
-#    cool = []
-#    x = math.ceil((len(fA)/8.)**(1./3.))
-#    for li in range(int(2*x)):
-#        i = 1.0 - li*(1.0-0.6)/(2*x-1)
-#        for lj in range(int(4*x)):
-#            j = lj*(1.0-0.0)/(4*x-1)
-#            for lk in range(int(x)):
-#                safe = x
-#                if x != 1: safe = x - 1
-#                k = lk*(0.25-0.0)/(safe)
-#                warm.append([i,j,k])
-#    
-#    x = math.ceil((len(fB)/8.)**(1./3.))
-#    for lk in range(int(2*x)):
-#        k = 1.0 - lk*(1.0-0.6)/(2*x-1)
-#        for lj in range(int(4*x)):
-#            j = lj*(1.0-0.0)/(4*x-1)
-#            for li in range(int(x)):
-#                safe = x
-#                if x != 1: safe = x - 1
-#                i = li*(0.25-0.0)/(safe)
-#                cool.append([i,j,k])
-#
-#    for frag in range(len(fA)):
-#        selection = ''
-#        for atom in range(len(fA[frag][1:])):
-#            key = str(map2orig[map2A[fA[frag][1+atom]]])
-#            selection += 'rank '+key+' '                
-#        cmd.select("("+fA[frag][0]+")", selection)
-#        #linspace through color vector
-#        safefA = len(fA)
-#        if len(fA) != 1: safefA = len(fA) - 1
-#        fragind = int(math.floor(frag*((len(warm))-1)/safefA))
-#        color = warm[fragind]
-#        cmd.set_color("A_"+fA[frag][0], color)
-#        cmd.color("A_"+fA[frag][0],"("+fA[frag][0]+")")
-#    for frag in range(len(fB)):
-#        selection = ''
-#        for atom in range(len(fB[frag][1:])):
-#            key = str(map2orig[map2B[fB[frag][1+atom]]+len(Aatoms)])
-#            selection += 'rank '+key+' '           
-#        cmd.select("("+fB[frag][0]+")", selection)
-#        #linspace through color vector
-#        safefB = len(fB)
-#        if len(fB) != 1: safefB = len(fB) - 1
-#        fragind = int(math.floor(frag*(len(cool)-1)/safefB))
-#        color = cool[fragind]
-#        cmd.set_color("B_"+str(fB[frag]), color)
-#        cmd.color("B_"+str(fB[frag]),"("+fB[frag][0]+")")
-#    if len(Catoms) > 0:
-#        selection = ''
-#        for atom in Catoms:
-#            selection += 'rank '+str(atom)+' '
-#        cmd.select("(ISAPT_C)", selection)
-#        cmd.color("grey", "(ISAPT_C)")
-#        
-#
-#def print_usage():
-#    print "WARNING: Any 'fA.dat' or 'fB.dat' files within"
-#    print "the current working directory will be removed"
-#    print "upon successful execution of this script." 
-#    print "Please move them to a safe place before"
-#    print "continuing."
-#    print ""
-#    print "This program is meant to be used within Pymol."
-#    print ""
-#    print "Directions (if making F-SAPT input file):"
-#    print "1. Change to the directory containing the"
-#    print "   desired geometry with .xyz file extension"
-#    print "   and open the geometry with Pymol."
-#    print "  -Example: 'pymol H2Odimer.xyz'"
-#    print "2. In Pymol, make a selection of all of the" 
-#    print "   border atoms for each F-SAPT fragment."
-#    print "  -Name each selection with an appropriate"
-#    print "   fragment name plus '_A' or '_B' for the"
-#    print "   corresponding monomer (A or B). This"
-#    print "   designation is case insensitive."
-#    print "  -Example: Methyl_A, phenyl_B"
-#    print "3. In the Pymol command line, type"
-#    print "   'run /FULL/PATH/TO/PROGRAM/geom_separator.py'"
-#    print "   -Example; 'run /Users/john_doe/Desktop/frag_gen/geom_separator.py"
-#    print ""
-#    print "That is it! Now an input file has been"
-#    print "generated, along with 'fA.dat' and 'fB.dat'"
-#    print "for F-SAPT analysis. Move the .dat files"
-#    print "into fsapt/ and/or s-fsapt/ when ready."
-#    print ""
-#    print "The input name will have the same name"
-#    print "as the '.xyz' file but with a '.in' extension."
-##    print ""
-##    print "Directions (if just making fA.dat and fB.dat)"
-##    print "1. Open the geometry used for F-SAPT input"
-##    print "   by typing 'pymol geom.xyz -- just_fragment'."
-##    print "2. In Pymol, make separate selections of border" 
-##    print "   atoms for F-SAPT fragmentation."
-##    print "  -Name each selection with an appropriate"
-##    print "   fragment name plus '_A' or '_B' for the"
-##    print "   corresponding monomer (A or B)."
-##    print "  -Example: Methyl_A, phenyl_B"
-##    print "3. In the Pymol command line, type"
-##    print "   'run fsapt_filemaker.py'"
-##    print ""
-##    print "Now you will have fA.dat and fB.dat for a"
-##    print "new round of F-SAPT analysis. If these files"
-##    print "already exist in the cwd, they will be"
-##    print "replaced by the new files."
-##    print "" 
-##    print "WARNING: Be sure that the ranks of atoms for"
-##    print "monomer A and B used for F-SAPT analysis are"
-##    print "nonoverlapping, meaning rank of atoms in"
-##    print "fragments for monomer A are in range [0,A]"
-##    print "and the rank of atoms in fragments for"
-##    print "monomer B are in range [A+1,Total Atoms - 1]."
-##    print "In short, use geom.xyz from fsapt/ or s-fsapt/"
-##    print "as stated earlier because this preserves the"
-##    print "nonoverlapping condition as well as having the"
-##    print "atom rank correspond to what was used in the" 
-##    print "original F-SAPT job."
-##    print "" 
-##    print "" 
-##    print "" 
 #
 #def sanity_check(fil_name):
 #    if not fil_name.endswith('.xyz'): 
@@ -530,230 +561,6 @@ class txt_molecule():
 #        sys.exit()
 #
 ####The bfs function was mostly written by Trent M. Parker and modified by Brandon W. Bakr.
-#def bfs(fil_name,fraginfo):
-#
-#    ## CONSTANTS ##
-#    
-#    # factor beyond average of covalent radii to determine bond cutoff
-#    bond_thresh = 1.20
-#    
-#    # covalent (or ionic) radii by atomic element in angstroms from
-#    # "Inorganic Chemistry" 3rd ed, Housecroft, Appendix 6, pgs 1013-1014
-#    cov_rad = {   'H' : 0.37, 'C' : 0.77, 'O' : 0.73, 'N' : 0.75, 'F' : 0.71,
-#      'P' : 1.10, 'S' : 1.03, 'Cl': 0.99, 'Br': 1.14, 'I' : 1.33, 'He': 0.30,
-#      'Ne': 0.84, 'Ar': 1.00, 'Li': 1.02, 'Be': 0.27, 'B' : 0.88, 'Na': 1.02,
-#      'Mg': 0.72, 'Al': 1.30, 'Si': 1.18, 'K' : 1.38, 'Ca': 1.00, 'Sc': 0.75,
-#      'Ti': 0.86, 'V' : 0.79, 'Cr': 0.73, 'Mn': 0.67, 'Fe': 0.61, 'Co': 0.64,
-#      'Ni': 0.55, 'Cu': 0.46, 'Zn': 0.60, 'Ga': 1.22, 'Ge': 1.22, 'As': 1.22,
-#      'Se': 1.17, 'Br': 1.14, 'Kr': 1.03}
-#    
-#    ## FUNCTIONS ##
-#    
-#    # create 2d array of strings from input file name
-#    def get_file_string_array(file_name):
-#      try:
-#        file = open(os.getcwd()+'/'+file_name, "r")
-#      except IOError:
-#        print 'Error: file (%s) does not exist!' % (file_name)
-#        sys.exit()
-#      file_data = file.readlines()
-#      file.close()
-#      file_array = []
-#      for line in file_data:
-#        file_array.append(line.split())
-#      return file_array
-#    
-#    # return key string from x, y, z values and block resolution
-#    def get_key(x, y, z, b):
-#      return '%i,%i,%i' % (x - x%b, y - y%b, z - z%b)
-#    
-#    # square distance between two 3-d cartesian coordinates
-#    def get_r2ij(coords_i, coords_j):
-#      r2ij = 0.0
-#      for p in range(3):
-#        r2ij += (coords_j[p] - coords_i[p])**2
-#      return r2ij
-#    
-#    ## CLASSES ##
-#    
-#    # geometry information for a molecule
-#    class Geometry:
-#      # constructor
-#      def __init__(self, xyz_file_name):
-#        self.source = xyz_file_name
-#        self.read_xyz(self.source)
-#    
-#      # read in data from file
-#      def read_xyz(self, xyz_file):
-#        xyz_array = get_file_string_array(xyz_file)
-#        self.n_atoms = int(xyz_array[0][0])
-#        self.comment = ' '.join(xyz_array[1])
-#        self.at_types = ['' for i in range(self.n_atoms)]
-#        self.coords = [[0.0 for j in range(3)] for i in range(self.n_atoms)]
-#        for i in range(self.n_atoms):
-#          self.at_types[i] = xyz_array[i+2][0].capitalize()
-#          for j in range(3):
-#            self.coords[i][j] = float(xyz_array[i+2][j+1])
-#        self.get_covradii()
-#        self.bond_tree = []
-#        self.fragments = []
-#        self.fragment_names = []
-#    
-#      # print geometry to output file
-#      def print_xyz(self, out_file, print_n_atoms):
-#        if (print_n_atoms):
-#          out_file.write('%i\n%s\n' % (self.n_atoms, self.comment))
-#        for i in range(self.n_atoms):
-#          out_file.write(' %-2s' % (self.at_types[i]))
-#          for j in range(3):
-#            out_file.write(' %12.6f' % (self.coords[i][j]))
-#          out_file.write('\n')
-#    
-#      # print fragment geometry to screen
-#      def print_xyz_frag(self, print_n_atoms, frag_num, geomfile):
-#        fil = open(geomfile,'w')
-#        n_frag_atoms = len(self.fragments[frag_num])
-#        fil.write('%i\n  fragment' % (n_frag_atoms))
-#        if (frag_num < len(self.fragment_names)):
-#          fil.write('%s\n' % (self.fragment_names[frag_num]))
-#        else:
-#          fil.write('%i\n' % (frag_num+1))
-#        for q in range(n_frag_atoms):
-#          i = self.fragments[frag_num][q]
-#          fil.write(' %-2s' % (self.at_types[i]))
-#          for j in range(3):
-#            fil.write('%12.6f' % (self.coords[i][j]))
-#        fil.close()    
-#
-#      # print geometry of all fragments to screen
-#      def print_xyz_allfrags(self, print_n_atoms):
-#        for p in range(len(self.fragments)):
-#          self.print_xyz_frag(print_n_atoms, p, 'Geomz.xyz')
-#    
-#      # determine molecular fragment structure from bond tree
-#      def get_fragments(self, intrafrag_file):
-#        self.get_bond_tree()
-#        self.get_intrafrags(intrafrag_file)
-#        break_list = []
-#        new_list = []
-#        unfound_list = [i for i in range(self.n_atoms)]
-#        for p in range(len(self.fragments)):
-#          new_list.append([])
-#          for q in range(len(self.fragments[p])):
-#            at_num = self.fragments[p][q]
-#            new_list[p].append(at_num)
-#            break_list.append(at_num)
-#            unfound_list.remove(at_num)
-#        while (len(unfound_list) > 0):
-#          for p in range(len(new_list)):
-#            while (len(new_list[p]) > 0):
-#              for q in range(len(new_list[p])-1, -1, -1):
-#                at1 = new_list[p][q]
-#                for r in range(len(self.bond_tree[at1])):
-#                  at2 = self.bond_tree[at1][r]
-#                  if (at2 in unfound_list and not at2 in break_list):
-#                    self.fragments[p].append(at2)
-#                    new_list[p].append(at2)
-#                    unfound_list.remove(at2)
-#                new_list[p].remove(at1)
-#          if (len(unfound_list) > 0):
-#            at_new = unfound_list[0]
-#            self.fragments.append([at_new])
-#            new_list.append([at_new])
-#            unfound_list.remove(at_new)
-#        for a in range(len(self.fragments)):
-#          self.fragments[a] = sorted(self.fragments[a])
-#    
-#      def print_fsapt_frags(self):
-#        fA = open(os.getcwd()+'/'+'fA.dat','w')
-#        fB = open(os.getcwd()+'/'+'fB.dat','w') 
-#        for frag_num in range(len(self.fragment_names)):
-#            if self.fragment_names[frag_num].endswith('_A') or self.fragment_names[frag_num].endswith('_a'): fil = fA
-#            elif self.fragment_names[frag_num].endswith('_B') or self.fragment_names[frag_num].endswith('_b'): fil = fB
-#            else: 
-#                print 'If F-SAPT fragmentation files are desired,\nadd _A and/or _B to corresponding fragments.'
-#                sys.exit()
-#            fil.write(self.fragment_names[frag_num]+' ')
-#            for atom in range(len(self.fragments[frag_num])):
-#                fil.write(str(self.fragments[frag_num][atom]+1)+' ')
-#            fil.write('\n')
-#        fA.close()
-#        fB.close()
-#    
-#      # read in list of intramolecular fragment border atoms from file
-#      def get_intrafrags(self, intrafrag_file):
-#        if (os.path.isfile(intrafrag_file)):
-#          intrafrag_array = get_file_string_array(intrafrag_file)
-#          for p in range(len(intrafrag_array)):
-#            if (len(intrafrag_array[p]) >= 2):
-#              self.fragment_names.append(intrafrag_array[p][0])
-#              self.fragments.append([])
-#              for q in range(1, len(intrafrag_array[p])):
-#                self.fragments[p].append(int(intrafrag_array[p][q])-1)
-#    
-#      # create bond tree from atomic coordinates
-#      def get_bond_tree(self):
-#        self.bond_tree = [[] for i in range(self.n_atoms)]
-#        self.get_blocks()
-#        for block in self.blocks:
-#          neighbor_blocks = self.get_neighbor_blocks(block)
-#          atom_list = self.get_atoms_from_blocks(neighbor_blocks)
-#          for p in range(len(self.blocks[block])):
-#            i = self.blocks[block][p]
-#            for q in range(len(atom_list)):
-#              j = atom_list[q]
-#              r2_ij = get_r2ij(self.coords[i], self.coords[j])
-#              r2_thresh = bond_thresh * (self.covrad[i] + self.covrad[j])**2
-#              if (r2_ij <= r2_thresh and not i == j):
-#                if (not j in self.bond_tree[i]):
-#                  self.bond_tree[i].append(j)
-#                if (not i in self.bond_tree[j]):
-#                  self.bond_tree[j].append(i)
-#    
-#      # parition atoms into spatial blocks
-#      def get_blocks(self):
-#        self.blocks = {}
-#        self.block_res = int(math.ceil(2.0 * bond_thresh * self.maxcovrad))
-#        for i in range(self.n_atoms):
-#          x, y, z = (int(math.floor(self.coords[i][j])) for j in range(3))
-#          xyz_key = get_key(x, y, z, self.block_res)
-#          if (not xyz_key in self.blocks):
-#            self.blocks[xyz_key] = []
-#          self.blocks[xyz_key].append(i)
-#    
-#      # find occupied blocks which neighbor given block, including self
-#      def get_neighbor_blocks(self, block):
-#        neighbor_blocks = []
-#        x1, y1, z1 = (int(block.split(',')[j]) for j in range(3))
-#        br = self.block_res
-#        for i in range(3):
-#          x = x1 + br*(i-1)
-#          for j in range(3):
-#            y = y1 + br*(j-1)
-#            for k in range(3):
-#              z = z1 + br*(k-1)
-#              key = get_key(x, y, z, self.block_res)
-#              if (key in self.blocks):
-#                neighbor_blocks.append(key)
-#        return neighbor_blocks
-#    
-#      # get list of atoms in a set of blocks
-#      def get_atoms_from_blocks(self, block_list):
-#        atom_list = []
-#        for block in block_list:
-#          block_atom_list = self.blocks[block]
-#          for p in range(len(block_atom_list)):
-#            atom_list.append(block_atom_list[p])
-#        return atom_list
-#    
-#      # return covalent radii for all atoms
-#      def get_covradii(self):
-#        self.maxcovrad = 0.0
-#        self.covrad = [0.0 for i in range(self.n_atoms)]
-#        for i in range(self.n_atoms):
-#          self.covrad[i] = cov_rad[self.at_types[i]]
-#          self.maxcovrad = max(self.maxcovrad, self.covrad[i])
-#    
 #    # check for proper input syntax and assign input variables
 #    def get_inputs():
 #        input_file, fragment_file = fil_name, fraginfo
@@ -777,17 +584,6 @@ class txt_molecule():
 #    sys.exit()
 #
 #
-##This is for older versions of pymol (< 1.8)
-##For some reason it doesn't like drawing bonds with boron.
-#B_N_bonds = cmd.find_pairs('n. b', 'n. n', cutoff=2.5)
-#for pair in B_N_bonds:
-#    cmd.bond('index %s' % pair[0][1], 'index %s' % pair[1][1])
-#B_O_bonds = cmd.find_pairs('n. b', 'n. o', cutoff=2.5)
-#for pair in B_O_bonds:
-#    cmd.bond('index %s' % pair[0][1], 'index %s' % pair[1][1])
-#B_C_bonds = cmd.find_pairs('n. b', 'n. c', cutoff=2.0)
-#for pair in B_C_bonds:
-#    cmd.bond('index %s' % pair[0][1], 'index %s' % pair[1][1])
 #
 #def fisapt(just_fragment = False, fsapt_path = 'fsapt', fsapt_plot_path = '', input_file = '', template = ''):
 #    #remove addition of 'xyz', make read in file name of command line
@@ -815,5 +611,4 @@ class txt_molecule():
 #        #fsapt_path = write_input_file(Aatoms, Batoms, Catoms, geom, fil_name, fsapt_path, fsapt_plot_path, input_file, template)
 #        #write_fA_and_fB(map2A, fA, map2B, fB, Aatoms, fsapt_path)
 #        #color_frags(map2orig, map2A, fA, map2B, fB, Aatoms, Catoms)
-#
-#cmd.extend("fisapt",fisapt)
+
