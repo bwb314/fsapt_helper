@@ -1,12 +1,129 @@
 import os
 
 def fsapt_generator():
+    pass 
+    # Should take border atoms (only!) from selections for monomers A & B (and C if C)
+    # Should return fA and fB 
+
+def bfs():
+    pass
+
+class txt_molecule():
+
+    def __init__(self, geom_path):
+
+        self.molecule = ""
+        with open(geom_path, 'r') as geom_fil:
+            geom_lines = geom_fil.readlines()[2:]
+            for lin in geom_lines
+###### CRYSTAL CLASS #####
+    def __init__(self, mol): 
+        if type(mol) is str and mol.endswith('.xyz'):
+            self.fil = mol
+            with open(mol,'r') as ofil:
+                n = int(next(ofil).split('\n')[0])
+                next(ofil)
+                els = []
+                geom = np.array([]).reshape(0,3)
+                for l in range(n):
+                    lin = next(ofil)
+                    ls = lin.split()
+                    els.append(ls[0])
+                    coords = [float(x) for x in ls[1:]]
+                    geom = np.vstack([geom,coords])
+                mol = [els,geom]
+        self.mol = mol
+        self.frags = []
+
+    def print_out(self):
+        els = self.mol[0]
+        print(len(els))
+        print("In Angstrom")
+        coords = self.mol[1]
+        for i in range(len(els)): 
+            el = els[i]
+            c = coords[i]
+            print("%2s %7.3f %7.3f %7.3f" % (el,c[0],c[1],c[2]))
+        print("")
+
+    def write_out(self,fil_name):
+        with open(fil_name,'w') as fil:
+            els = self.mol[0]
+            fil.write("%d\n" % (len(els)))
+            fil.write("In Angstrom\n")
+            coords = self.mol[1]
+            for i in range(len(els)): 
+                el = els[i]
+                c = coords[i]
+                fil.write("%2s %7.3f %7.3f %7.3f\n" % (el,c[0],c[1],c[2]))
+
+    def bfs(self):
+        els = self.mol[0]
+        coords = self.mol[1]
+        lc = len(coords)
+        bonds = {}
+        #find all bonded atoms
+        for i in range(1,lc):
+            for j in range(i):
+                if not bound(els[i],coords[i],els[j],coords[j]): continue
+                try: bonds[i].append(j)
+                except: bonds[i] = [j]
+        #Construct subsets such that each pair has a null intersection (BFS)
+        minds = []
+        ind = bonds.keys()[0]
+        while bonds != {}:
+        
+        self.frags = mols
+
+    #function that moves mol to align with self
+    # 0 is Q
+    # 1 is P
+    def rmsd(self, mol):
+        #self
+        els0 = self.mol[0]  
+        coords0 = self.mol[1] 
+        #shift to center
+        coords0 = coords0 - coords0.mean(axis=0)
+        #mol
+        els1 = mol.mol[0]  
+        coords1 = mol.mol[1]  
+        coords1 = coords1 - coords1.mean(axis=0)
+        
+        #covariance matrix
+        H = np.dot(coords1.T, coords0)
+        V, s, Wt = np.linalg.svd(H)
+        d = np.linalg.det(np.dot(V,Wt))
+        I = np.identity(3)
+        I[2,2] = d 
+        R = np.dot(np.dot(V,I),Wt)
+        coords1 = np.dot(coords1,R)
+        ans = np.linalg.norm(coords0 - coords1) / np.sqrt(coords0.shape[0])
+        return ans
     
-    os.mkdir('fsapt/')
-    with open('fsapt/fA.dat','w') as fil:
-        fil.close()    
-    with open('fsapt/fB.dat','w') as fil:
-        fil.close()    
+    def extract_frags(self, frag_nums):
+        els = []
+        coords = np.array([]).reshape(0,3)
+        for f in frag_nums:
+            els = els + self.frags[f].mol[0]    
+            coords = np.vstack([coords,self.frags[f].mol[1]])
+        return crystal([els,coords])    
+
+    def nuclear_repulsion_energy(self):
+        e = 0.
+        for a1 in range(len(self.mol[0])):
+            for a2 in range(a1):
+                z1 = z_num[self.mol[0][a1]]
+                z2 = z_num[self.mol[0][a2]]
+                d = 1.88973*dist(self.mol[1][a1],self.mol[1][a2])
+                e += z1 * z2 / d
+        return e 
+
+
+#    os.mkdir('fsapt/')
+#    with open('fsapt/fA.dat','w') as fil:
+#        fil.close()    
+#    with open('fsapt/fB.dat','w') as fil:
+#        fil.close()    
 
 #import os, sys, math, commands, string
 #export PYTHONPATH=/anaconda/bin/:/Users/brandonbakr/psi4/install/lib/
