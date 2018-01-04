@@ -2,6 +2,7 @@ import os
 import numpy as np
 import copy
 from pymol import cmd 
+import random
 import sys
 
 def fsapt_generator():
@@ -26,7 +27,6 @@ def bound(A_el, A_coord, B_el, B_coord):
 
 class pm_mol():
 
-    ###### CRYSTAL CLASS #####
     def __init__(self, mol): 
     
         if type(mol) is str and mol.endswith('.xyz'):
@@ -127,23 +127,21 @@ class pm_mol():
         # bfs
         # find frag with desired atoms
         # extract and set equal to frag
-        lets = ['A', 'B' ,'C']
-        cuts = {}
-        for let in lets:
-            border_atoms = frags[let]['sele_'+let]
-            # remove atoms of other frags
-            # I believe this is just border_atoms xor border_selections
-            other_borders = []
-            for let2 in lets:
-                if let == let2: continue
-                for atoms in frags[let2]['sele_'+let2]:
-                    other_borders.append(atoms)
+        
+        for frag in frags.keys():
+            border_atoms = frags[frag]
             
+            other_borders = []
+            for frag2 in frags.keys():
+                if frag == frag2: continue
+                for border_atom in frags[frag2]: 
+                    other_borders.append(border_atom)           
+ 
             copy_mol = self.copy() 
             
             for border in other_borders:
                 copy_mol.mol[0][border] = 'XXX'
-                
+            
             new_copy_els = []
             new_copy_coords = []
             for i in range(len(copy_mol.mol[0])):
@@ -156,101 +154,55 @@ class pm_mol():
             for border in border_atoms:
                 target_coords = self.mol[1][border]
                 found_frag = False
-                for frag in new_copy.frags:
-                    for coords in frag.mol[1]:
+                for new_frag in new_copy.frags:
+                    for coords in new_frag.mol[1]:
                         if not np.array_equal(target_coords, coords): continue
-                        found_frag = frag
+                        found_frag = new_frag
                         break
                     if found_frag != False: break
-                #found_frag.print_out()
-                if let == 'C': break
-            cuts[let] = found_frag
-        self.cuts = cuts
+                if found_frag != False: break
+            for atom_coords in found_frag.mol[1]:
+                 for ind in range(len(self.mol[1])):
+                    if not np.array_equal(self.mol[1][ind], atom_coords): continue
+                    if ind not in frags[frag]: frags[frag].append(ind)
+                    break         
+       
+        self.color_frags(frags)
+        with open('fA.dat', 'w') as fA:
+            for frag in frags:
+                classification = frag.split('_')[-1].upper()
+                if classification != 'A': continue
+                fA.write(frag+' ')
+                for atom in frags[frag]: 
+                    fA.write(str(atom+1)+' ')
+                fA.write('\n')
+
+        with open('fB.dat', 'w') as fB:
+            for frag in frags:
+                classification = frag.split('_')[-1].upper()
+                if classification != 'B': continue
+                fB.write(frag+' ')
+                for atom in frags[frag]: 
+                    fB.write(str(atom+1)+' ')
+                fB.write('\n')
+                
+            
 
     #color fragments based on fragmentation from bfs
-    def color_frags(self):
-    
-        lets = ['A', 'B', 'C']
-        inds = [[], [], []]
-        dict_inds = dict(zip(lets,inds))
-        for let in lets:
-            cut = self.cuts[let]
-            cut_coords = cut.mol[1]
-            for coord in cut_coords:
-                for ind in range(len(self.mol[1])):
-                    if np.array_equal(self.mol[1][ind], coord):
-                        dict_inds[let].append(ind)
-                        break
-        for let in lets:
+    def color_frags(self, frags):
+
+        for frag in frags:
             selection = ''
-            for ind in dict_inds[let]: 
-                selection += 'rank '+str(ind)+' '
-            cmd.select("(sele_"+let+")", selection)
-            cmd.color("red", "(sele_A)")
-            cmd.color("blue", "(sele_B)")
-            cmd.color("grey", "(sele_C)")
-
+            for atom in frags[frag]:
+                selection += 'rank '+str(atom)+' '
+            cmd.select("("+frag+")", selection)
+            r = random.uniform(0, 1)           
+            g = random.uniform(0, 1)           
+            b = random.uniform(0, 1)           
+            color = [r, g, b]
+            cmd.set_color("color_"+frag, color) 
+            cmd.color("color_"+frag, "("+frag+")")
     
-        #warm = []
-        #cool = []
-        #x = math.ceil((len(fA)/8.)**(1./3.))
-        #for li in range(int(2*x)):
-        #    i = 1.0 - li*(1.0-0.6)/(2*x-1)
-        #    for lj in range(int(4*x)):
-        #        j = lj*(1.0-0.0)/(4*x-1)
-        #        for lk in range(int(x)):
-        #            safe = x
-        #            if x != 1: safe = x - 1
-        #            k = lk*(0.25-0.0)/(safe)
-        #            warm.append([i,j,k])
-        #
-        #x = math.ceil((len(fB)/8.)**(1./3.))
-        #for lk in range(int(2*x)):
-        #    k = 1.0 - lk*(1.0-0.6)/(2*x-1)
-        #    for lj in range(int(4*x)):
-        #        j = lj*(1.0-0.0)/(4*x-1)
-        #        for li in range(int(x)):
-        #            safe = x
-        #            if x != 1: safe = x - 1
-        #            i = li*(0.25-0.0)/(safe)
-        #            cool.append([i,j,k])
-    
-        #for frag in range(len(fA)):
-        #    selection = ''
-        #    for atom in range(len(fA[frag][1:])):
-        #        key = str(map2orig[map2A[fA[frag][1+atom]]])
-        #        selection += 'rank '+key+' '                
-        #    cmd.select("("+fA[frag][0]+")", selection)
-        #    #linspace through color vector
-        #    safefA = len(fA)
-        #    if len(fA) != 1: safefA = len(fA) - 1
-        #    fragind = int(math.floor(frag*((len(warm))-1)/safefA))
-        #    color = warm[fragind]
-        #    cmd.set_color("A_"+fA[frag][0], color)
-        #    cmd.color("A_"+fA[frag][0],"("+fA[frag][0]+")")
-        #for frag in range(len(fB)):
-        #    selection = ''
-        #    for atom in range(len(fB[frag][1:])):
-        #        key = str(map2orig[map2B[fB[frag][1+atom]]+len(Aatoms)])
-        #        selection += 'rank '+key+' '           
-        #    cmd.select("("+fB[frag][0]+")", selection)
-        #    #linspace through color vector
-        #    safefB = len(fB)
-        #    if len(fB) != 1: safefB = len(fB) - 1
-        #    fragind = int(math.floor(frag*(len(cool)-1)/safefB))
-        #    color = cool[fragind]
-        #    cmd.set_color("B_"+str(fB[frag]), color)
-        #    cmd.color("B_"+str(fB[frag]),"("+fB[frag][0]+")")
-        #if len(Catoms) > 0:
-        #    selection = ''
-        #    for atom in Catoms:
-        #        selection += 'rank '+str(atom)+' '
-        #    cmd.select("(ISAPT_C)", selection)
-        #    cmd.color("grey", "(ISAPT_C)")
-
-
-#diphenyl = pm_mol('examples/diphenyl_benzene.xyz')
-#diphenyl.cut(A = [12], B = [24], C = [2, 4])
 
 # Read main geometry
 def read_original_geometry():
@@ -261,23 +213,39 @@ def read_original_geometry():
 
 
 def fisapt():
-
+    
+    # Make it pretty 
     cmd.show("sticks", "all")
+
+    # Initialize pm molecule object
     total_molecule = read_original_geometry()
+
+    allowed_classifications = ['A', 'B', 'C']
+    # Take in user border atoms
     frag_names = cmd.get_names("all")[1:]
-    frags = {'A': {}, 'B': {}, 'C': {}}
+    frags = {}
     for name in frag_names:
         classification = name.split('_')[-1].upper()
-        frags[classification][name] = []
+        if classification not in allowed_classifications: 
+            print("USAGE!")
+            sys.exit()
+        frags[name] = []
         stored.list=[]
         cmd.iterate("("+name+")","stored.list.append((name,rank))")
         for atom in stored.list: 
-            frags[classification][name].append(atom[1])
-    cuts = total_molecule.cut(frags)
-    total_molecule.color_frags()
-\
+            frags[name].append(atom[1])
+
+    # Fill up with fragments and color the fragments 
+    fragments = total_molecule.cut(frags)
+
+    # Should write input, fA, and fB outside of class, need info from above
 
 cmd.extend("fisapt",fisapt)
+
+
+#diphenyl = pm_mol('examples/diphenyl_benzene.xyz')
+#diphenyl.cut(A = [12], B = [24], C = [2, 4])
+
 
 #### OLD FRAG GEN ###
 ##read fragmentation input for eventual fA and fB generation
