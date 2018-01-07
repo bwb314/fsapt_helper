@@ -111,17 +111,6 @@ class pm_mol():
             mols.append(pm_mol([mels,mcoords]))
         self.frags = mols
 
-
-    
-    def extract_frags(self, frag_nums):
-    
-        els = []
-        coords = np.array([]).reshape(0,3)
-        for f in frag_nums:
-            els = els + self.frags[f].mol[0]    
-            coords = np.vstack([coords,self.frags[f].mol[1]])
-        return crystal([els,coords])    
-
     def cut(self, frags):
         # remove atoms of other frags
         # bfs
