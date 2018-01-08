@@ -157,6 +157,12 @@ class pm_mol():
                     break         
        
         self.color_frags(frags)
+        self.write_frags(frags)
+
+
+    # Need to resolve naming of `frags`, already exists as deprecated member data from crystal class
+    def write_frags(self, frags):
+
         with open('fA.dat', 'w') as fA:
             for frag in frags:
                 classification = frag.split('_')[-1].upper()
@@ -175,7 +181,6 @@ class pm_mol():
                     fB.write(str(atom+1)+' ')
                 fB.write('\n')
                 
-            
 
     #color fragments based on fragmentation from bfs
     def color_frags(self, frags):
@@ -185,9 +190,17 @@ class pm_mol():
             for atom in frags[frag]:
                 selection += 'rank '+str(atom)+' '
             cmd.select("("+frag+")", selection)
-            r = random.uniform(0, 1)           
             g = random.uniform(0, 1)           
-            b = random.uniform(0, 1)           
+            classification = frag.split('_')[-1].upper()
+            if classification == 'C':
+                cmd.color("grey", "("+frag+")")
+                continue
+            elif classification == 'A':
+                r = random.uniform(0.5, 1)           
+                b = random.uniform(0, 0.5)           
+            elif classification == 'B':
+                r = random.uniform(0, 0.5)           
+                b = random.uniform(0.5, 1) 
             color = [r, g, b]
             cmd.set_color("color_"+frag, color) 
             cmd.color("color_"+frag, "("+frag+")")
