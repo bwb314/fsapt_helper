@@ -263,7 +263,6 @@ energy('fisapt0')"""
                         break
                     if found_frag != False: break
                 if found_frag != False: break
-            found_frag.print_out()
             for atom_coords in found_frag.mol[1]:
                  for ind in range(len(self.mol[1])):
                     if not np.array_equal(self.mol[1][ind], atom_coords):
@@ -271,7 +270,27 @@ energy('fisapt0')"""
                     if ind not in frags[frag]: 
                         frags[frag].append(ind)
                     break         
-       
+
+        # Clean and combine all C
+        copy_mol = self.copy() 
+            
+        for frag in frags.keys():
+            classification = frag.split('_')[-1].upper()
+            if classification != 'C':
+                for atom in frags[frag]:
+                    copy_mol.mol[0][atom] = 'XXX'
+                continue
+            del frags[frag]
+    
+        frags['ISAPT_C'] = []
+        for ind in range(len(self.mol[0])):
+            atom = self.mol[0][ind]
+            if atom == 'XXX': 
+                continue
+            frags['ISAPT_C'].append(ind)
+        if frags['ISAPT_C'] == []:
+            del frags['ISAPT_C']    
+      
         self.color_frags(frags)
         self.write_frags(frags)
        
@@ -345,7 +364,6 @@ def fisapt():
     frags = {}
     for name in frag_names:
         classification = name.split('_')[-1].upper()
-        print(classification)
         if classification not in allowed_classifications: 
             print("USAGE!")
             sys.exit()
@@ -354,6 +372,10 @@ def fisapt():
         cmd.iterate("("+name+")","stored.list.append((name,rank))")
         for atom in stored.list: 
             frags[name].append(atom[1])
+        
+        # All C fragments are in "ISAPT_C"
+        if classification == 'C':
+            cmd.delete(name)
 
     # Fill up with fragments and color the fragments 
     fragments = total_molecule.cut(frags)
