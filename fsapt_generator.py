@@ -284,7 +284,7 @@ energy('fisapt0')"""
     
         frags['ISAPT_C'] = []
         for ind in range(len(self.mol[0])):
-            atom = self.mol[0][ind]
+            atom = copy_mol.mol[0][ind]
             if atom == 'XXX': 
                 continue
             frags['ISAPT_C'].append(ind)
