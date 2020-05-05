@@ -169,7 +169,7 @@ energy('fisapt0')"""
         with open(fil_name, 'w') as fil:
             fil.write(input_file)
 
-    def bfs(self):
+    def union_find(self):
     
         els = self.mol[0]
         coords = self.mol[1]
@@ -181,7 +181,8 @@ energy('fisapt0')"""
                 if not bound(els[i],coords[i],els[j],coords[j]): continue
                 bonds.append(set([i,j]))
 
-        #Construct subsets such that each pair has a null intersection (BFS)
+        #Construct subsets such that each pair has a null 
+        #intersection (union find)
         minds = []
         while bonds != []:
             mol = bonds[0]
@@ -224,7 +225,7 @@ energy('fisapt0')"""
 
     def cut(self, frags):
         # remove atoms of other frags
-        # bfs
+        # union find
         # find frag with desired atoms
         # extract and set equal to frag
        
@@ -251,7 +252,7 @@ energy('fisapt0')"""
                 new_copy_coords.append(copy_mol.mol[1][i]) 
             
             new_copy = pm_mol([new_copy_els, new_copy_coords])
-            new_copy.bfs()
+            new_copy.union_find()
             for border in border_atoms:
                 target_coords = self.mol[1][border]
                 found_frag = False
@@ -318,7 +319,7 @@ energy('fisapt0')"""
                 fB.write('\n')
                 
 
-    #color fragments based on fragmentation from bfs
+    #color fragments based on fragmentation from union find 
     def color_frags(self, frags):
 
         for frag in frags:
@@ -384,7 +385,9 @@ def fisapt():
     total_molecule.write_input(fragments, fil_name = cmd.get_names("all")[0]+".in")
 
 cmd.extend("fisapt",fisapt)
-
+cmd.load("/Users/brandonbakr/Desktop/demo/hexaphenylbenzene.xyz")
+cmd.show("sticks", "all")
+cmd.hide("spheres", "all")
 
 #diphenyl = pm_mol('examples/diphenyl_benzene.xyz')
 #diphenyl.cut(A = [12], B = [24], C = [2, 4])
